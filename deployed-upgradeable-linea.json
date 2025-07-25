@@ -1,0 +1,13 @@
+{
+  "proxyAddress": "0x1159fed833f27530D5AC855247c196b280202235",
+  "implementationAddress": "0x9498FB695c44A35fEB2b348a4E121cBC3D7EbD2a",
+  "tokenAddress": "0x38A67021bBe639caB6120c553719B5CFa60f3F18",
+  "treasuryAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "deployer": "0xc07F32BbB2500Cd91603ebA79402676Dec203303",
+  "deployedAt": "2025-07-24T14:47:18.454Z",
+  "network": "linea",
+  "chainId": "59144",
+  "rewardAmount": "40000000000000000000",
+  "maxGamesPerDay": 4,
+  "version": "1.0.0"
+}

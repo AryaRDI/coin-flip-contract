@@ -1,0 +1,289 @@
+{
+  "manifestVersion": "3.2",
+  "proxies": [
+    {
+      "address": "0xb85eA89cdAf87De277C6Fa385E48e1b70bd55CA3",
+      "txHash": "0xd91647268a85f79caa2313316de5a8e4297c8c9e819f4bbace79be7b23ce831e",
+      "kind": "uups"
+    }
+  ],
+  "impls": {
+    "f05371303ec87d695d3e0608878ff0dc91367ec06ab190131170f6f780beb16d": {
+      "address": "0x64d4671c7D6572E6b696a3E573097e0f92629511",
+      "txHash": "0x292fa9c770644e12aac32113c00b9b8114440c18e88cc5667e40de2ce2119273",
+      "layout": {
+        "solcVersion": "0.8.28",
+        "storage": [
+          {
+            "label": "rewardToken",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_contract(IERC20)4128",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:23"
+          },
+          {
+            "label": "rewardAmount",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:24"
+          },
+          {
+            "label": "treasuryWallet",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_address",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:28"
+          },
+          {
+            "label": "minTreasuryBalance",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_uint256",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:29"
+          },
+          {
+            "label": "games",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_bytes32,t_struct(Game)4163_storage)",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:40"
+          },
+          {
+            "label": "dailyGamesCount",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_mapping(t_address,t_mapping(t_uint256,t_uint256))",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:43"
+          },
+          {
+            "label": "maxGamesPerDay",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint256",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:44"
+          },
+          {
+            "label": "authorizedDepositors",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_mapping(t_address,t_bool)",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:47"
+          },
+          {
+            "label": "totalRewardsDistributed",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint256",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:48"
+          },
+          {
+            "label": "totalGamesPlayed",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256",
+            "contract": "TreasuryCoinFlipUpgradeable",
+            "src": "contracts/TreasuryCoinFlipUpgradeable.sol:49"
+          }
+        ],
+        "types": {
+          "t_address": {
+            "label": "address",
+            "numberOfBytes": "20"
+          },
+          "t_bool": {
+            "label": "bool",
+            "numberOfBytes": "1"
+          },
+          "t_struct(InitializableStorage)236_storage": {
+            "label": "struct Initializable.InitializableStorage",
+            "members": [
+              {
+                "label": "_initialized",
+                "type": "t_uint64",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "_initializing",
+                "type": "t_bool",
+                "offset": 8,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(OwnableStorage)176_storage": {
+            "label": "struct OwnableUpgradeable.OwnableStorage",
+            "members": [
+              {
+                "label": "_owner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(PausableStorage)387_storage": {
+            "label": "struct PausableUpgradeable.PausableStorage",
+            "members": [
+              {
+                "label": "_paused",
+                "type": "t_bool",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_struct(ReentrancyGuardStorage)451_storage": {
+            "label": "struct ReentrancyGuardUpgradeable.ReentrancyGuardStorage",
+            "members": [
+              {
+                "label": "_status",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "0"
+              }
+            ],
+            "numberOfBytes": "32"
+          },
+          "t_uint256": {
+            "label": "uint256",
+            "numberOfBytes": "32"
+          },
+          "t_uint64": {
+            "label": "uint64",
+            "numberOfBytes": "8"
+          },
+          "t_bytes32": {
+            "label": "bytes32",
+            "numberOfBytes": "32"
+          },
+          "t_contract(IERC20)4128": {
+            "label": "contract IERC20",
+            "numberOfBytes": "20"
+          },
+          "t_mapping(t_address,t_bool)": {
+            "label": "mapping(address => bool)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_address,t_mapping(t_uint256,t_uint256))": {
+            "label": "mapping(address => mapping(uint256 => uint256))",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_bytes32,t_struct(Game)4163_storage)": {
+            "label": "mapping(bytes32 => struct TreasuryCoinFlipUpgradeable.Game)",
+            "numberOfBytes": "32"
+          },
+          "t_mapping(t_uint256,t_uint256)": {
+            "label": "mapping(uint256 => uint256)",
+            "numberOfBytes": "32"
+          },
+          "t_struct(Game)4163_storage": {
+            "label": "struct TreasuryCoinFlipUpgradeable.Game",
+            "members": [
+              {
+                "label": "creator",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "0"
+              },
+              {
+                "label": "joiner",
+                "type": "t_address",
+                "offset": 0,
+                "slot": "1"
+              },
+              {
+                "label": "creatorSide",
+                "type": "t_bool",
+                "offset": 20,
+                "slot": "1"
+              },
+              {
+                "label": "isActive",
+                "type": "t_bool",
+                "offset": 21,
+                "slot": "1"
+              },
+              {
+                "label": "resolved",
+                "type": "t_bool",
+                "offset": 22,
+                "slot": "1"
+              },
+              {
+                "label": "createdAt",
+                "type": "t_uint256",
+                "offset": 0,
+                "slot": "2"
+              }
+            ],
+            "numberOfBytes": "96"
+          }
+        },
+        "namespaces": {
+          "erc7201:openzeppelin.storage.ReentrancyGuard": [
+            {
+              "contract": "ReentrancyGuardUpgradeable",
+              "label": "_status",
+              "type": "t_uint256",
+              "src": "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol:43",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Pausable": [
+            {
+              "contract": "PausableUpgradeable",
+              "label": "_paused",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol:21",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Ownable": [
+            {
+              "contract": "OwnableUpgradeable",
+              "label": "_owner",
+              "type": "t_address",
+              "src": "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol:24",
+              "offset": 0,
+              "slot": "0"
+            }
+          ],
+          "erc7201:openzeppelin.storage.Initializable": [
+            {
+              "contract": "Initializable",
+              "label": "_initialized",
+              "type": "t_uint64",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:69",
+              "offset": 0,
+              "slot": "0"
+            },
+            {
+              "contract": "Initializable",
+              "label": "_initializing",
+              "type": "t_bool",
+              "src": "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:73",
+              "offset": 8,
+              "slot": "0"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
