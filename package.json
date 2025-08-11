@@ -7,15 +7,22 @@
     "deploy:local": "hardhat run scripts/deploy.ts --network localhost -- --treasury",
     "deploy:local:vrf": "hardhat run scripts/deploy.ts --network localhost",
     "deploy:local:proxy": "hardhat run scripts/deploy-upgradeable.ts --network localhost",
+    "deploy:local:coinflip": "hardhat run scripts/deploy-coinflip-upgradeable.ts --network localhost",
     "deploy:lineaTestnet": "hardhat run scripts/deploy.ts --network lineaTestnet -- --treasury",
     "deploy:lineaTestnet:proxy": "hardhat run scripts/deploy-upgradeable.ts --network lineaTestnet",
+    "deploy:lineaTestnet:coinflip": "hardhat run scripts/deploy-coinflip-upgradeable.ts --network lineaTestnet",
     "deploy:linea": "hardhat run scripts/deploy.ts --network linea -- --treasury",
     "deploy:linea:proxy": "hardhat run scripts/deploy-upgradeable.ts --network linea",
     "upgrade:local": "hardhat run scripts/upgrade.ts --network localhost",
+    "upgrade:local:coinflip": "hardhat run scripts/upgrade-coinflip.ts --network localhost",
     "upgrade:lineaTestnet": "hardhat run scripts/upgrade.ts --network lineaTestnet",
+    "upgrade:lineaTestnet:coinflip": "hardhat run scripts/upgrade-coinflip.ts --network lineaTestnet",
     "upgrade:linea": "hardhat run scripts/upgrade.ts --network linea",
+    "upgrade:linea:coinflip": "hardhat run scripts/upgrade-coinflip.ts --network linea",
     "test": "hardhat test",
     "test:treasury": "hardhat run scripts/test-treasury-game.js --network localhost",
+    "test:coinflip": "hardhat run scripts/test-coinflip-game.ts --network localhost",
+    "configure:api3": "hardhat run scripts/configure-api3.ts --network localhost",
     "check:deployments": "hardhat run scripts/check-deployments.js --network localhost",
     "migrate:funds": "hardhat run scripts/migrate-funds.ts --network linea",
     "cancel:tx": "hardhat run scripts/cancel-pending-tx.ts --network linea"
@@ -25,6 +32,8 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@api3/airnode-protocol": "^0.15.0",
+    "@api3/contracts": "^26.2.1",
     "@nomicfoundation/hardhat-ethers": "^3.0.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/hardhat-upgrades": "^3.0.0",
@@ -36,6 +45,7 @@
     "@chainlink/contracts": "^1.4.0",
     "@openzeppelin/contracts": "^5.0.0",
     "@openzeppelin/contracts-upgradeable": "^5.0.0",
+    "@pythnetwork/entropy-sdk-solidity": "^2.0.0",
     "dotenv": "^16.5.0"
   }
 }
