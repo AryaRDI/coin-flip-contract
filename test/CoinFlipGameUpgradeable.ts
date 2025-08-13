@@ -284,7 +284,7 @@ describe("CoinFlipGameUpgradeable", function () {
         .withArgs(0); // GameCancelled event only has gameId parameter
 
       const game = await coinFlipGame.getGame(0);
-      expect(game.state).to.equal(4); // CANCELLED
+      expect(game.state).to.equal(3); // CANCELLED
       expect(game.pool).to.equal(0);
     });
 
@@ -354,7 +354,7 @@ describe("CoinFlipGameUpgradeable", function () {
         .to.emit(coinFlipGame, "ResolvedWithSigner");
 
       const resolvedGame = await coinFlipGame.getGame(0);
-      expect(resolvedGame.state).to.equal(3); // RESOLVED
+      expect(resolvedGame.state).to.equal(2); // RESOLVED
       expect(resolvedGame.winner).to.not.equal(ethers.ZeroAddress);
     });
 
@@ -384,11 +384,7 @@ describe("CoinFlipGameUpgradeable", function () {
       const g = await coinFlipGame.getGame(0);
       const winner = g.winner === creator.address ? creator : joiner;
       
-      // Withdraw adds to claimable funds
-      await expect(coinFlipGame.connect(winner).withdraw(0))
-        .to.emit(coinFlipGame, "FundsAdded");
-        
-      // Winner claims their funds
+      // Winner claims their funds (auto-booked by _finalizeResolution)
       await expect(coinFlipGame.connect(winner).claimFunds(ethers.ZeroAddress))
         .to.emit(coinFlipGame, "FundsClaimed");
     });
@@ -420,7 +416,7 @@ describe("CoinFlipGameUpgradeable", function () {
         .to.emit(coinFlipGame, "GameResolved");
 
       const resolvedGame = await coinFlipGame.getGame(0);
-      expect(resolvedGame.state).to.equal(3); // RESOLVED
+      expect(resolvedGame.state).to.equal(2); // RESOLVED
       expect(resolvedGame.winner).to.equal(creator.address); // Creator chose HEADS and won
     });
 
@@ -442,7 +438,7 @@ describe("CoinFlipGameUpgradeable", function () {
         .to.emit(coinFlipGame, "GameResolved");
 
       const resolvedGame = await coinFlipGame.getGame(0);
-      expect(resolvedGame.state).to.equal(3); // RESOLVED
+      expect(resolvedGame.state).to.equal(2); // RESOLVED
       expect(resolvedGame.winner).to.equal(joiner.address); // Joiner wins when TAILS
     });
 
@@ -510,7 +506,7 @@ describe("CoinFlipGameUpgradeable", function () {
         .to.emit(coinFlipGame, "GameResolved");
 
       const resolvedGame = await coinFlipGame.getGame(0);
-      expect(resolvedGame.state).to.equal(3); // RESOLVED
+      expect(resolvedGame.state).to.equal(2); // RESOLVED
       expect(resolvedGame.winner).to.equal(creator.address); // Creator chose TAILS and won
     });
   });
@@ -527,8 +523,9 @@ describe("CoinFlipGameUpgradeable", function () {
         { value: stake }
       );
 
-      await expect(coinFlipGame.connect(creator).withdraw(0))
-        .to.be.revertedWith("bad state");
+      // Test that creator cannot claim funds from unresolved game
+      await expect(coinFlipGame.connect(creator).claimFunds(ethers.ZeroAddress))
+        .to.be.revertedWith("no funds");
     });
   });
 
@@ -558,7 +555,9 @@ describe("CoinFlipGameUpgradeable", function () {
 
       const g = await coinFlipGame.getGame(0);
       const nonWinner = g.winner === creator.address ? joiner : creator;
-      await expect(coinFlipGame.connect(nonWinner).withdraw(0)).to.be.revertedWith("!winner");
+      // Test that non-winner cannot claim winner's funds (they have 0 claimable)
+      await expect(coinFlipGame.connect(nonWinner).claimFunds(ethers.ZeroAddress))
+        .to.be.revertedWith("no funds");
     });
 
     it("Should revert on double withdraw with 'paid'", async function () {
@@ -582,8 +581,9 @@ describe("CoinFlipGameUpgradeable", function () {
       await coinFlipGame.connect(owner).resolveBySigner(0, seed as any);
 
       const g1 = await coinFlipGame.getGame(0);
-      await coinFlipGame.connect((g1.winner === creator.address ? creator : joiner)).withdraw(0);
-      await expect(coinFlipGame.connect((g1.winner === creator.address ? creator : joiner)).withdraw(0)).to.be.revertedWith("paid");
+      const winner = g1.winner === creator.address ? creator : joiner;
+      await coinFlipGame.connect(winner).claimFunds(ethers.ZeroAddress);
+      await expect(coinFlipGame.connect(winner).claimFunds(ethers.ZeroAddress)).to.be.revertedWith("no funds");
     });
 
     it("Should transfer payout to winner (ETH) and leave only fee in contract", async function () {
@@ -613,10 +613,9 @@ describe("CoinFlipGameUpgradeable", function () {
       const gResolved = await coinFlipGame.getGame(0);
 
       expect(await coinFlipGame.accFeeOf(ethers.ZeroAddress)).to.equal(fee);
-      expect(gResolved.pool).to.equal(payout);
+      expect(gResolved.pool).to.equal(0); // pool cleared, payout in claimableFunds
 
       const winner = gResolved.winner === creator.address ? creator : joiner;
-      await coinFlipGame.connect(winner).withdraw(0);
       await coinFlipGame.connect(winner).claimFunds(ethers.ZeroAddress);
       const balanceAfter = await ethers.provider.getBalance(coinFlipGame.target);
       expect(balanceBefore - balanceAfter).to.equal(payout); // only fee remains
@@ -659,7 +658,6 @@ describe("CoinFlipGameUpgradeable", function () {
       const loser = winner === creator ? joiner : creator;
 
       const balBefore = await mockToken.balanceOf(winner.address);
-      await coinFlipGame.connect(winner).withdraw(0);
       await coinFlipGame.connect(winner).claimFunds(mockToken.target);
       const balAfter = await mockToken.balanceOf(winner.address);
       expect(balAfter - balBefore).to.equal(payout);
@@ -908,7 +906,7 @@ describe("CoinFlipGameUpgradeable", function () {
       const balJAfter = await ethers.provider.getBalance(joiner.address);
       // Each should receive stake back (approx; gas makes ETH checks brittle, so check game state and pool too)
       const g = await coinFlipGame.getGame(0);
-      expect(g.state).to.equal(4); // CANCELLED
+      expect(g.state).to.equal(3); // CANCELLED
       expect(g.pool).to.equal(0);
     });
 
@@ -947,7 +945,7 @@ describe("CoinFlipGameUpgradeable", function () {
       expect(balJAfter - balJBefore).to.equal(stake);
       
       const g = await coinFlipGame.getGame(0);
-      expect(g.state).to.equal(4);
+      expect(g.state).to.equal(3); // CANCELLED
       await expect(coinFlipGame.connect(creator).claimRefund(0)).to.be.revertedWith("bad state");
     });
   });

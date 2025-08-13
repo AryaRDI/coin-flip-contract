@@ -70,7 +70,6 @@ contract CoinFlipGameUpgradeable is
 
     enum GameState {
         CREATED,
-        JOINED,
         RESOLVING,
         RESOLVED,
         CANCELLED
@@ -255,18 +254,6 @@ contract CoinFlipGameUpgradeable is
         emit Refunded(id);
     }
 
-    /// @notice Winner withdraws – only after resolved.
-    function withdraw(uint256 id) external nonReentrant inState(id, GameState.RESOLVED) {
-        Game storage g = games[id];
-        require(msg.sender == g.winner, "!winner");
-        uint256 payout = g.pool; // already fee‑deducted at resolve
-        require(payout > 0, "paid");
-        g.pool = 0;
-        
-        // Use pull payment pattern to prevent DOS
-        claimableFunds[msg.sender][g.token] += payout;
-        emit FundsAdded(msg.sender, g.token, payout);
-    }
 
     // ────────────────────────  Randomness  ─────────────────────────────
 
@@ -339,7 +326,11 @@ contract CoinFlipGameUpgradeable is
         uint256 fee = (g.pool * FEE_BPS) / BPS_DEN;
         uint256 payout = g.pool - fee;
         accFeeOf[g.token] += fee;
-        g.pool = payout; // remaining amount claimable by winner
+        g.pool = 0; // pool cleared, payout booked to claimableFunds
+
+        // Book winnings directly to claimableFunds
+        claimableFunds[winner][g.token] += payout;
+        emit FundsAdded(winner, g.token, payout);
 
         g.winner = winner;
         g.state = GameState.RESOLVED;
@@ -439,8 +430,15 @@ contract CoinFlipGameUpgradeable is
         uint256 balance = address(this).balance;
         require(balance > 0, "No ETH to sweep");
         
-        // Only sweep if no active games (basic check)
-        require(nextId == 0 || games[nextId - 1].state != GameState.RESOLVING, "Active games exist");
+        // Check all games for liability, not just last game
+        for (uint256 i = 0; i < nextId; i++) {
+            GameState state = games[i].state;
+            require(state == GameState.RESOLVED || state == GameState.CANCELLED, "Active games exist");
+            if (state == GameState.RESOLVED) {
+                // Ensure winner has claimed their funds
+                require(games[i].pool == 0, "Unclaimed winnings exist");
+            }
+        }
         
         (bool success, ) = owner().call{value: balance}("");
         require(success, "ETH transfer failed");
