@@ -1069,20 +1069,16 @@ describe("CoinFlipGameUpgradeable", function () {
   });
 
   describe("Emergency Functions", function () {
-    it("Should skip sweep test - contract blocks direct ETH", async function () {
-      // This test is skipped because:
-      // 1. Contract has receive() function that reverts on direct ETH transfers
-      // 2. Creating and canceling games refunds ETH to creator, leaving 0 balance
-      // 3. No clean way to get ETH stuck in contract for testing
-      // The sweep function logic itself is correct for emergency situations
-    });
-
-    it("Should skip active games sweep test - no ETH to sweep", async function () {
-      // This test is skipped because:
-      // 1. Contract blocks direct ETH transfers via receive() function
-      // 2. Creating games doesn't leave ETH in contract - it's properly managed
-      // 3. The sweep function would fail on "No ETH to sweep" before checking active games
-      // The active games check logic in sweep function is sound for emergency scenarios
+    it("Should use withdrawFees for protocol ETH instead of sweep", async function () {
+      // sweepNative function has been removed for security reasons:
+      // 1. Loop-based liability checking is DoS-prone (unbounded gas)
+      // 2. Hard to prove "no user liabilities" on-chain without global counters
+      // 3. withdrawFees(address(0), amount) provides safe, explicit ETH extraction
+      // 4. With receive() reverting and pull-payments, no "stray ETH" in normal operation
+      
+      const { coinFlipGame } = await loadFixture(deployCoinFlipFixture);
+      // Verify withdrawFees exists as the safe alternative
+      expect(typeof coinFlipGame.withdrawFees).to.equal("function");
     });
   });
 

@@ -425,24 +425,7 @@ contract CoinFlipGameUpgradeable is
     }
 
     // ─────────────────────  Emergency Functions  ───────────────────────
-
-    function sweepNative() external onlyOwner timelocked(keccak256("SWEEP")) {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "No ETH to sweep");
-        
-        // Check all games for liability, not just last game
-        for (uint256 i = 0; i < nextId; i++) {
-            GameState state = games[i].state;
-            require(state == GameState.RESOLVED || state == GameState.CANCELLED, "Active games exist");
-            if (state == GameState.RESOLVED) {
-                // Ensure winner has claimed their funds
-                require(games[i].pool == 0, "Unclaimed winnings exist");
-            }
-        }
-        
-        (bool success, ) = owner().call{value: balance}("");
-        require(success, "ETH transfer failed");
-    }
+    // sweepNative removed - use withdrawFees(address(0), amount) for protocol ETH
 
     // ─────────────────────  Fallback safety  ──────────────────────────
 
