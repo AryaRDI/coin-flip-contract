@@ -110,11 +110,13 @@ contract CoinFlipGameUpgradeable is
     mapping(address => uint256)        public accFeeOf; // token‑wise fee pot
     uint256 public nextId;
 
+    // Pull payment pattern to prevent DOS attacks
+    mapping(address => mapping(address => uint256)) public claimableFunds; // user => token => amount
+
     // ─────────────────────  Hardened RNG (commit‑reveal)  ─────────────────
     // Epoch-based server commitment to a secret seed: keccak256(epochSeed)
     uint64  public serverEpoch;                         // current epoch id
     mapping(uint64 => bytes32) public epochCommitment;  // epoch => commitment
-    mapping(uint64 => bytes32) public revealedSeedOf;   // epoch => revealed seed (optional)
 
     // Trusted backend signer allowed to reveal/resolve early
     address public trustedSigner;
@@ -135,13 +137,12 @@ contract CoinFlipGameUpgradeable is
     event GameCancelled(uint256 indexed id);
     event Refunded(uint256 indexed id);
     event Whitelisted(address token, bool isAllowed);
+    event FundsAdded(address indexed user, address indexed token, uint256 amount);
+    event FundsClaimed(address indexed user, address indexed token, uint256 amount);
 
     // ─────────────────────  New events for commit‑reveal  ─────────────────
     event ServerCommitted(uint64 indexed epoch, bytes32 commitment);
-    event ServerRevealed(uint64 indexed epoch, bytes32 seed);
     event ResolvedWithSigner(uint256 indexed id, uint256 rnd);
-    event ResolvedWithRevealed(uint256 indexed id, uint256 rnd);
-    event ResolvedWithFallback(uint256 indexed id, uint256 rnd);
     event EmergencyResolved(uint256 indexed id, CoinSide winSide, address winner);
     event TrustedSignerUpdated(address indexed oldSigner, address indexed newSigner);
 
@@ -241,12 +242,16 @@ contract CoinFlipGameUpgradeable is
     /// @notice Claim refund if resolving stuck > RESOLVE_GRACE (public)
     function claimRefund(uint256 id) external nonReentrant inState(id, GameState.RESOLVING) {
         Game storage g = games[id];
-        require(block.timestamp >= g.resolveBy, "grace");
+        require(block.timestamp > g.resolveBy, "grace");
         g.state = GameState.CANCELLED;
         uint256 refund = g.pool / 2;
         g.pool = 0;
-        _payout(g.token, g.creator, refund);
-        _payout(g.token, g.joiner, refund);
+        
+        // Use pull payment pattern to prevent DOS
+        claimableFunds[g.creator][g.token] += refund;
+        claimableFunds[g.joiner][g.token] += refund;
+        emit FundsAdded(g.creator, g.token, refund);
+        emit FundsAdded(g.joiner, g.token, refund);
         emit Refunded(id);
     }
 
@@ -257,7 +262,10 @@ contract CoinFlipGameUpgradeable is
         uint256 payout = g.pool; // already fee‑deducted at resolve
         require(payout > 0, "paid");
         g.pool = 0;
-        _payout(g.token, msg.sender, payout);
+        
+        // Use pull payment pattern to prevent DOS
+        claimableFunds[msg.sender][g.token] += payout;
+        emit FundsAdded(msg.sender, g.token, payout);
     }
 
     // ────────────────────────  Randomness  ─────────────────────────────
@@ -265,7 +273,7 @@ contract CoinFlipGameUpgradeable is
     // ─────────────────────  Commit‑reveal admin  ─────────────────────────
 
     function setTrustedSigner(address newSigner)
-        external onlyOwner timelocked(keccak256("TRUSTED_SIGNER"))
+        external onlyOwner timelocked(keccak256(abi.encode("TRUSTED_SIGNER", newSigner)))
     {
         address old = trustedSigner;
         trustedSigner = newSigner;
@@ -273,30 +281,26 @@ contract CoinFlipGameUpgradeable is
     }
 
     function commitServerSeed(bytes32 commitment, uint64 newEpoch)
-        external onlyOwner timelocked(keccak256("SERVER_COMMIT"))
+        external onlyOwner timelocked(keccak256(abi.encode("SERVER_COMMIT", newEpoch, commitment)))
     {
         require(commitment != bytes32(0), "bad commit");
+        require(epochCommitment[newEpoch] == bytes32(0), "epoch set");
+        require(newEpoch >= serverEpoch, "epoch<current");
         epochCommitment[newEpoch] = commitment;
         if (newEpoch > serverEpoch) serverEpoch = newEpoch;
         emit ServerCommitted(newEpoch, commitment);
     }
 
-    function revealServerSeed(bytes32 seed, uint64 epoch)
-        external onlyTrusted
-    {
-        require(epochCommitment[epoch] != bytes32(0), "no commit");
-        require(keccak256(abi.encodePacked(seed)) == epochCommitment[epoch], "bad reveal");
-        revealedSeedOf[epoch] = seed;
-        emit ServerRevealed(epoch, seed);
-    }
 
     // ─────────────────────  Resolution paths  ───────────────────────────
 
     function resolveBySigner(uint256 id, bytes32 seed)
         external onlyTrusted nonReentrant inState(id, GameState.RESOLVING)
     {
+        Game storage g = games[id];
         GameRngData storage r = gameRngOf[id];
-        require(block.number >= r.targetBlockNumber, "too early");
+        require(block.timestamp <= g.resolveBy, "grace expired");
+        require(block.number > r.targetBlockNumber, "too early");
         require(epochCommitment[r.epoch] != bytes32(0), "no epoch commit");
         require(keccak256(abi.encodePacked(seed)) == epochCommitment[r.epoch], "seed !commit");
 
@@ -312,40 +316,7 @@ contract CoinFlipGameUpgradeable is
         emit ResolvedWithSigner(id, rnd);
     }
 
-    function resolveWithRevealed(uint256 id)
-        external nonReentrant inState(id, GameState.RESOLVING)
-    {
-        GameRngData storage r = gameRngOf[id];
-        require(revealedSeedOf[r.epoch] != bytes32(0), "no reveal");
-        require(block.number >= r.targetBlockNumber, "too early");
 
-        bytes32 bh = blockhash(r.targetBlockNumber);
-        if (bh == bytes32(0)) {
-            bh = blockhash(block.number - 1);
-        }
-        bytes32 serverSeedI = keccak256(abi.encodePacked(revealedSeedOf[r.epoch], id));
-        uint256 rnd = uint256(keccak256(abi.encodePacked(serverSeedI, r.seedHash, bh, r.targetBlockNumber)));
-
-        _finalizeResolution(id, rnd);
-        emit ResolvedWithRevealed(id, rnd);
-    }
-
-    function resolveWithFallback(uint256 id)
-        external nonReentrant inState(id, GameState.RESOLVING)
-    {
-        Game storage g = games[id];
-        GameRngData storage r = gameRngOf[id];
-        require(block.timestamp >= g.resolveBy, "grace");
-
-        bytes32 bh = blockhash(r.targetBlockNumber);
-        if (bh == bytes32(0)) {
-            bh = blockhash(block.number - 1);
-        }
-        uint256 rnd = uint256(keccak256(abi.encodePacked(r.seedHash, bh, r.targetBlockNumber)));
-
-        _finalizeResolution(id, rnd);
-        emit ResolvedWithFallback(id, rnd);
-    }
 
     /// @notice Emergency resolution that bypasses grace period. Only callable by trusted signer.
     /// @dev Backend determines winner off-chain and passes desired side for immediate resolution.
@@ -407,6 +378,15 @@ contract CoinFlipGameUpgradeable is
         if (from >= nextId) return out; // Return empty array if from is beyond range
         out = new Game[](to - from);
         for (uint256 i = from; i < to; ++i) out[i - from] = games[i];
+    }
+
+    /// @notice Pull payment function - users claim their funds to prevent DOS
+    function claimFunds(address token) external nonReentrant {
+        uint256 amount = claimableFunds[msg.sender][token];
+        require(amount > 0, "no funds");
+        claimableFunds[msg.sender][token] = 0;
+        _payout(token, msg.sender, amount);
+        emit FundsClaimed(msg.sender, token, amount);
     }
 
     // ─────────────────────  Internal helpers  ─────────────────────────

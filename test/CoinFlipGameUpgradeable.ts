@@ -347,7 +347,7 @@ describe("CoinFlipGameUpgradeable", function () {
       await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
 
       // Wait until target block is mined
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
 
       // Resolve by signer with seed
       await expect(coinFlipGame.connect(owner).resolveBySigner(0, seed as any))
@@ -358,16 +358,15 @@ describe("CoinFlipGameUpgradeable", function () {
       expect(resolvedGame.winner).to.not.equal(ethers.ZeroAddress);
     });
 
-    it("Should resolve via revealed seed (public path)", async function () {
+    it("Should test pull payment for winnings", async function () {
       const { coinFlipGame, owner, creator, joiner } = await loadFixture(deployCoinFlipFixture);
       const stake = ethers.parseEther("1");
 
-      // Timelocked: set trusted signer to owner (to call reveal)
+      // Setup trusted signer and seed
       await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
       await time.increase(2 * 60 * 60 + 1);
       await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
 
-      // Commit server seed for epoch 1
       const seed = ethers.hexlify(ethers.randomBytes(32));
       const commitment = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seed]));
       await coinFlipGame.connect(owner).commitServerSeed(commitment, 1);
@@ -378,29 +377,27 @@ describe("CoinFlipGameUpgradeable", function () {
       await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 0, { value: stake });
       await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
 
-      // Reveal seed (onlyTrusted)
-      await coinFlipGame.connect(owner).revealServerSeed(seed as any, 1);
-
-      // Wait until target block is mined
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
-
-      // Public resolve with revealed seed
-      await expect(coinFlipGame.connect(joiner).resolveWithRevealed(0))
-        .to.emit(coinFlipGame, "ResolvedWithRevealed");
+      // Resolve game
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
+      await coinFlipGame.connect(owner).resolveBySigner(0, seed as any);
+      
+      const g = await coinFlipGame.getGame(0);
+      const winner = g.winner === creator.address ? creator : joiner;
+      
+      // Withdraw adds to claimable funds
+      await expect(coinFlipGame.connect(winner).withdraw(0))
+        .to.emit(coinFlipGame, "FundsAdded");
+        
+      // Winner claims their funds
+      await expect(coinFlipGame.connect(winner).claimFunds(ethers.ZeroAddress))
+        .to.emit(coinFlipGame, "FundsClaimed");
     });
 
-    it("Should resolve via fallback after grace", async function () {
-      const { coinFlipGame, creator, joiner } = await loadFixture(deployCoinFlipFixture);
-      const stake = ethers.parseEther("1");
-
-      await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 0, { value: stake });
-      await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
-
-      // Increase time beyond RESOLVE_GRACE (6 hours)
-      await time.increase(6 * 60 * 60 + 1);
-
-      await expect(coinFlipGame.connect(creator).resolveWithFallback(0))
-        .to.emit(coinFlipGame, "ResolvedWithFallback");
+    it("Should test claimFunds with no balance", async function () {
+      const { coinFlipGame, creator } = await loadFixture(deployCoinFlipFixture);
+      
+      await expect(coinFlipGame.connect(creator).claimFunds(ethers.ZeroAddress))
+        .to.be.revertedWith("no funds");
     });
   });
 
@@ -550,7 +547,7 @@ describe("CoinFlipGameUpgradeable", function () {
       await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
 
       // Mine required block then resolve by signer (winner could be creator or joiner)
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
       const seed = ethers.hexlify(ethers.randomBytes(32));
       const commitment = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seed]));
       // commit to current epoch captured at join (1)
@@ -575,7 +572,7 @@ describe("CoinFlipGameUpgradeable", function () {
 
       await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 0, { value: stake });
       await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
 
       const seed = ethers.hexlify(ethers.randomBytes(32));
       const commitment = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seed]));
@@ -606,7 +603,7 @@ describe("CoinFlipGameUpgradeable", function () {
 
       await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 0, { value: stake });
       await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
 
       // Resolve and check balances
       const balanceBefore = await ethers.provider.getBalance(coinFlipGame.target);
@@ -618,7 +615,9 @@ describe("CoinFlipGameUpgradeable", function () {
       expect(await coinFlipGame.accFeeOf(ethers.ZeroAddress)).to.equal(fee);
       expect(gResolved.pool).to.equal(payout);
 
-      await coinFlipGame.connect((gResolved.winner === creator.address ? creator : joiner)).withdraw(0);
+      const winner = gResolved.winner === creator.address ? creator : joiner;
+      await coinFlipGame.connect(winner).withdraw(0);
+      await coinFlipGame.connect(winner).claimFunds(ethers.ZeroAddress);
       const balanceAfter = await ethers.provider.getBalance(coinFlipGame.target);
       expect(balanceBefore - balanceAfter).to.equal(payout); // only fee remains
     });
@@ -649,7 +648,7 @@ describe("CoinFlipGameUpgradeable", function () {
 
       await coinFlipGame.connect(creator).createGame(mockToken.target, stake, 0, { value: 0 });
       await coinFlipGame.connect(joiner).joinGame(0, { value: 0 });
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
       await coinFlipGame.connect(owner).resolveBySigner(0, seed as any);
 
       const fee = (stake * 2n * 200n) / 10000n;
@@ -661,6 +660,7 @@ describe("CoinFlipGameUpgradeable", function () {
 
       const balBefore = await mockToken.balanceOf(winner.address);
       await coinFlipGame.connect(winner).withdraw(0);
+      await coinFlipGame.connect(winner).claimFunds(mockToken.target);
       const balAfter = await mockToken.balanceOf(winner.address);
       expect(balAfter - balBefore).to.equal(payout);
 
@@ -688,7 +688,7 @@ describe("CoinFlipGameUpgradeable", function () {
 
       await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 0, { value: stake });
       await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
       await coinFlipGame.connect(owner).resolveBySigner(0, seed as any);
 
       const fee = (stake * 2n * 200n) / 10000n;
@@ -732,7 +732,7 @@ describe("CoinFlipGameUpgradeable", function () {
 
       await coinFlipGame.connect(creator).createGame(mockToken.target, stake, 0, { value: 0 });
       await coinFlipGame.connect(joiner).joinGame(0, { value: 0 });
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
       await coinFlipGame.connect(owner).resolveBySigner(0, seed as any);
 
       const fee = (stake * 2n * 200n) / 10000n;
@@ -774,6 +774,22 @@ describe("CoinFlipGameUpgradeable", function () {
       const commitB = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seedB]));
       await coinFlipGame.connect(owner).commitServerSeed(commitB, 11);
       expect(await coinFlipGame.epochCommitment(11)).to.equal(ethers.ZeroHash);
+      
+      // Execute epoch 11
+      await time.increase(2 * 60 * 60 + 1);
+      await coinFlipGame.connect(owner).commitServerSeed(commitB, 11);
+      
+      // Should revert trying to overwrite existing epoch (after timelock)
+      await coinFlipGame.connect(owner).commitServerSeed(commitA, 10);
+      await time.increase(2 * 60 * 60 + 1);
+      await expect(coinFlipGame.connect(owner).commitServerSeed(commitA, 10))
+        .to.be.revertedWith("epoch set");
+        
+      // Should revert trying to go backwards (after timelock)  
+      await coinFlipGame.connect(owner).commitServerSeed(commitA, 9);
+      await time.increase(2 * 60 * 60 + 1);
+      await expect(coinFlipGame.connect(owner).commitServerSeed(commitA, 9))
+        .to.be.revertedWith("epoch<current");
     });
 
     it("setWhitelist should queue then execute; flipping allow is a separate queue", async function () {
@@ -811,7 +827,7 @@ describe("CoinFlipGameUpgradeable", function () {
       await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
 
       // Before commit -> expect "no epoch commit"
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
       await expect(coinFlipGame.connect(owner).resolveBySigner(0, ethers.ZeroHash)).to.be.revertedWith("no epoch commit");
 
       // Now commit a seed but pass wrong seed (seed !commit)
@@ -824,45 +840,33 @@ describe("CoinFlipGameUpgradeable", function () {
       await expect(coinFlipGame.connect(owner).resolveBySigner(0, ethers.ZeroHash)).to.be.revertedWith("seed !commit");
     });
 
-    it("resolveWithRevealed should revert: no reveal, too early", async function () {
+    it("Should revert resolution after grace period expires", async function () {
       const { coinFlipGame, owner, creator, joiner } = await loadFixture(deployCoinFlipFixture);
       const stake = ethers.parseEther("1");
 
+      // Setup trusted signer and commitment
+      await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
+      await time.increase(2 * 60 * 60 + 1);
+      await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
+
+      const seed = ethers.hexlify(ethers.randomBytes(32));
+      const commit = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seed]));
+      await coinFlipGame.connect(owner).commitServerSeed(commit, 1);
+      await time.increase(2 * 60 * 60 + 1);
+      await coinFlipGame.connect(owner).commitServerSeed(commit, 1);
+
       await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 0, { value: stake });
       await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
-
-      // Commit but don't reveal -> no reveal
-      const seed = ethers.hexlify(ethers.randomBytes(32));
-      const commit = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seed]));
-      await coinFlipGame.connect(owner).commitServerSeed(commit, 13);
-      await time.increase(2 * 60 * 60 + 1);
-      await coinFlipGame.connect(owner).commitServerSeed(commit, 13);
-
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
-      await expect(coinFlipGame.connect(joiner).resolveWithRevealed(0)).to.be.revertedWith("no reveal");
-
-      // Now set trusted and reveal, but call too early (before next block) on a fresh game
-      await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
-      await time.increase(2 * 60 * 60 + 1);
-      await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
-
-      await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 1, { value: stake });
-      await coinFlipGame.connect(joiner).joinGame(1, { value: stake });
-      await coinFlipGame.connect(owner).revealServerSeed(seed as any, 13);
-      // Mine at least one block to reach target block
-      await hre.network.provider.send("hardhat_mine", ["0x2"]);
-      await expect(coinFlipGame.connect(joiner).resolveWithRevealed(1)).to.emit(coinFlipGame, "ResolvedWithRevealed");
+      
+      // Wait beyond grace period
+      await time.increase(6 * 60 * 60 + 1);
+      await hre.network.provider.send("hardhat_mine", ["0x3"]); // Need more blocks for strict > check
+      
+      // Should revert with grace expired
+      await expect(coinFlipGame.connect(owner).resolveBySigner(0, seed as any))
+        .to.be.revertedWith("grace expired");
     });
 
-    it("revealServerSeed should revert for non-trusted", async function () {
-      const { coinFlipGame, owner } = await loadFixture(deployCoinFlipFixture);
-      const seed = ethers.hexlify(ethers.randomBytes(32));
-      const commit = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seed]));
-      await coinFlipGame.connect(owner).commitServerSeed(commit, 14);
-      await time.increase(2 * 60 * 60 + 1);
-      await coinFlipGame.connect(owner).commitServerSeed(commit, 14);
-      await expect(coinFlipGame.revealServerSeed(seed as any, 14)).to.be.revertedWith("!signer");
-    });
   });
 
   describe("Blockhash fallback branch", function () {
@@ -887,25 +891,6 @@ describe("CoinFlipGameUpgradeable", function () {
       await expect(coinFlipGame.connect(owner).resolveBySigner(0, seed as any)).to.emit(coinFlipGame, "ResolvedWithSigner");
     });
 
-    it("resolveWithRevealed should use fallback when target blockhash is zero", async function () {
-      const { coinFlipGame, owner, creator, joiner } = await loadFixture(deployCoinFlipFixture);
-      const stake = ethers.parseEther("1");
-      await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
-      await time.increase(2 * 60 * 60 + 1);
-      await coinFlipGame.connect(owner).setTrustedSigner(owner.address);
-
-      const seed = ethers.hexlify(ethers.randomBytes(32));
-      const commit = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [seed]));
-      await coinFlipGame.connect(owner).commitServerSeed(commit, 16);
-      await time.increase(2 * 60 * 60 + 1);
-      await coinFlipGame.connect(owner).commitServerSeed(commit, 16);
-
-      await coinFlipGame.connect(creator).createGame(ethers.ZeroAddress, stake, 0, { value: stake });
-      await coinFlipGame.connect(joiner).joinGame(0, { value: stake });
-      await coinFlipGame.connect(owner).revealServerSeed(seed as any, 16);
-      await hre.network.provider.send("hardhat_mine", ["0x12C"]);
-      await expect(coinFlipGame.connect(joiner).resolveWithRevealed(0)).to.emit(coinFlipGame, "ResolvedWithRevealed");
-    });
   });
 
   describe("Claim refund", function () {
@@ -943,13 +928,24 @@ describe("CoinFlipGameUpgradeable", function () {
 
       await expect(coinFlipGame.connect(creator).claimRefund(0)).to.be.revertedWith("grace");
       await time.increase(6 * 60 * 60 + 1);
+      
+      await coinFlipGame.connect(creator).claimRefund(0);
+      
+      // Check funds were added to claimable mapping  
+      expect(await coinFlipGame.claimableFunds(creator.address, mockToken.target)).to.equal(stake);
+      expect(await coinFlipGame.claimableFunds(joiner.address, mockToken.target)).to.equal(stake);
+      
+      // Users claim their funds
       const balCBefore = await mockToken.balanceOf(creator.address);
       const balJBefore = await mockToken.balanceOf(joiner.address);
-      await coinFlipGame.connect(creator).claimRefund(0);
+      await coinFlipGame.connect(creator).claimFunds(mockToken.target);
+      await coinFlipGame.connect(joiner).claimFunds(mockToken.target);
       const balCAfter = await mockToken.balanceOf(creator.address);
       const balJAfter = await mockToken.balanceOf(joiner.address);
-      expect(balCAfter - balCBefore).to.equal(stake / 1n); // got stake back (approx halves each, but both get stake)
-      expect(balJAfter - balJBefore).to.equal(stake / 1n);
+      
+      expect(balCAfter - balCBefore).to.equal(stake);
+      expect(balJAfter - balJBefore).to.equal(stake);
+      
       const g = await coinFlipGame.getGame(0);
       expect(g.state).to.equal(4);
       await expect(coinFlipGame.connect(creator).claimRefund(0)).to.be.revertedWith("bad state");
